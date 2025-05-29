@@ -1,3 +1,6 @@
+![Python](https://img.shields.io/badge/Python-3.x-blue)
+![Blender](https://img.shields.io/badge/Blender-3.0+-orange)
+
 # Degenor.3D
 **Design Generativo de Órteses em Blender**
 
@@ -63,3 +66,24 @@ O Degenor.3D permite que o usuário personalize a órtese a partir de três par�
 4. Clique em "Gerar Órtese".
 
 Opcional: Caso queira limpar a cena e começar novamente, utilize o botão "Limpar Cena".
+
+## 🖥️ Arquitetura do Código
+
+O Degenor.3D foi desenvolvido em Python utilizando a API do Blender. Abaixo estão os principais métodos, suas descrições e finalidades dentro do funcionamento do plugin.
+
+| Método                    | Descrição                                | Finalidade                                                    |
+|---------------------------|------------------------------------------|---------------------------------------------------------------|
+| obter_ou_criar_colecao    | Cria ou recupera uma coleção no Blender  | Organizar os objetos da órtese na cena                        |
+| limpar_colecao            | Remove todos os objetos da coleção       | Facilitar reinício ou nova geração da órtese                  |
+| criar_retangulo           | Cria o sólido base em formato retangular | Base estrutural da órtese                                     |
+| calcular_volume_esfera    | Calcula o volume de uma esfera           | Usado para balancear a quantidade de pontos no Voronoi        |
+| gerar_pontos_semente      | Gera pontos aleatórios no volume da base | Definir onde ocorrerão as remoções no padrão Voronoi          |
+| criar_esferas             | Cria esferas nos pontos de semente       | Elementos para realizar a subtração booleana e gerar o padrão |
+| aplicar_boolean_subtracao | Subtrai múltiplos objetos da base        | Criar os vazios da estrutura Voronoi                          |
+| aplicar_boolean_diferenca | Subtrai um objeto específico da base     | Usado na criação da margem ou cortes específicos              |
+| criar_margem              | Cria a moldura externa da órtese         | Delimita o contorno e oferece resistência estrutural          |
+| exportar_stl              | Exporta a órtese como arquivo STL        | Preparação para impressão 3D                                  |
+| GeradorOrteseOperator     | Executa o processo de geração da órtese  | Automação no Blender via interface                            |
+| LimparOrteseOperator      | Limpa a coleção da órtese                | Gerenciar versões e reiniciar projetos                        |
+| DegenorPainel             | Cria a interface no Blender              | Permite a interação do usuário com o plugin                   |
+
