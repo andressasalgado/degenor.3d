@@ -6,7 +6,7 @@ bl_info = {
     "location": "View3D > Sidebar > Degenor",
     "description": "Gera órtese com furos esféricos com base em porcentagem de remoção",
     "warning": "",
-    "doc_url": "",
+    "doc_url": "https://github.com/andressasalgado/degenor.3d",
     "category": "Object",
 }
 
@@ -18,6 +18,7 @@ from mathutils import Vector, kdtree
 
 # -------------------- GESTÃO DE COLEÇÕES --------------------
 
+# Cria uma nova coleção no Blender ou obtém uma existente
 def obter_ou_criar_colecao(nome):
     if nome in bpy.data.collections:
         return bpy.data.collections[nome]
@@ -26,6 +27,7 @@ def obter_ou_criar_colecao(nome):
         bpy.context.scene.collection.children.link(colecao)
         return colecao
 
+# Remove todos os objetos de uma coleção específica
 def limpar_colecao(nome):
     if nome in bpy.data.collections:
         colecao = bpy.data.collections[nome]
@@ -34,6 +36,7 @@ def limpar_colecao(nome):
 
 # -------------------- FUNÇÕES AUXILIARES --------------------
 
+# Cria um retângulo 3D com os parâmetros de comprimento, largura e espessura
 def criar_retangulo(comprimento, largura, espessura, nome="Retangulo", colecao=None):
     bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0))
     cubo = bpy.context.active_object
@@ -50,10 +53,11 @@ def criar_retangulo(comprimento, largura, espessura, nome="Retangulo", colecao=N
 
     return cubo
 
-
+# Calcula o volume de uma esfera com base no raio
 def calcular_volume_esfera(raio):
     return (4/3) * math.pi * (raio ** 3)
 
+# Gera pontos aleatórios dentro do volume do retângulo para aplicar o design generativo
 def gerar_pontos_semente(volume_retangulo, remocao_percentual, comprimento, largura, espessura):
     volume_removido_alvo = (remocao_percentual / 100) * volume_retangulo
     volume_atual_removido = 0
@@ -105,6 +109,7 @@ def gerar_pontos_semente(volume_retangulo, remocao_percentual, comprimento, larg
 
     return pontos
 
+# Cria esferas nos pontos de semente gerados
 def criar_esferas(pontos, colecao):
     esferas = []
     for idx, (ponto, raio) in enumerate(pontos):
@@ -122,7 +127,7 @@ def criar_esferas(pontos, colecao):
         esferas.append(esfera)
     return esferas
 
-
+# Aplica uma operação booleana de subtração de múltiplos objetos (cortadores) sobre uma base
 def aplicar_boolean_subtracao(base, cortadores):
     bpy.ops.object.select_all(action='DESELECT')
     for obj in cortadores:
@@ -140,6 +145,7 @@ def aplicar_boolean_subtracao(base, cortadores):
 
     bpy.data.objects.remove(unido, do_unlink=True)
 
+# Aplica uma operação booleana de diferença entre dois objetos
 def aplicar_boolean_diferenca(objeto_base, objeto_corte):
     mod = objeto_base.modifiers.new(name="BooleanMargin", type='BOOLEAN')
     mod.object = objeto_corte
@@ -149,6 +155,7 @@ def aplicar_boolean_diferenca(objeto_base, objeto_corte):
 
 # -------------------- CRIAR MARGEM --------------------
 
+# Cria a margem (moldura) externa da órtese, que delimita a peça
 def criar_margem(comprimento, largura, espessura, colecao):
     margem_externa = criar_retangulo(comprimento + 0.01, largura + 0.0008, espessura, "Margem_Externa", colecao)
 
@@ -172,6 +179,7 @@ def criar_margem(comprimento, largura, espessura, colecao):
 
 # -------------------- EXPORTAR STL --------------------
 
+# Exporta o objeto 3D como um arquivo STL
 def exportar_stl(obj, caminho):
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
@@ -180,7 +188,8 @@ def exportar_stl(obj, caminho):
 
 # -------------------- OPERADOR PRINCIPAL --------------------
 
-class OrtopediaGeneratorOperator(bpy.types.Operator):
+# Operador principal que gera a órtese através da interface do Blender
+class GeradorOrteseOperator(bpy.types.Operator):
     bl_idname = "object.gerar_ortese"
     bl_label = "Gerar Órtese"
 
@@ -216,6 +225,7 @@ class OrtopediaGeneratorOperator(bpy.types.Operator):
 
         return {'FINISHED'}
 
+# Operador que limpa a cena ou a coleção, removendo os objetos da órtese
 class LimparOrteseOperator(bpy.types.Operator):
     bl_idname = "object.limpar_ortese"
     bl_label = "Limpar Órtese"
@@ -227,7 +237,8 @@ class LimparOrteseOperator(bpy.types.Operator):
 
 # -------------------- INTERFACE --------------------
 
-class OrtopediaPainel(bpy.types.Panel):
+# Define o painel na interface do Blender para interação com o plugin
+class DegenorPainel(bpy.types.Panel):
     bl_label = "Gerador de Órtese"
     bl_idname = "PT_DegenorPanel"
     bl_space_type = "VIEW_3D"
@@ -245,7 +256,7 @@ class OrtopediaPainel(bpy.types.Panel):
 
 # -------------------- REGISTRO --------------------
 
-classes = [OrtopediaGeneratorOperator, LimparOrteseOperator, OrtopediaPainel]
+classes = [GeradorOrteseOperator, LimparOrteseOperator, DegenorPainel]
 
 def register():
     for cls in classes:
