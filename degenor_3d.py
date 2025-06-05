@@ -1,11 +1,10 @@
 bl_info = {
     "name": "Degenor.3D",
     "author": "Andressa Salgado",
-    "version": (1, 0),
+    "version": (1, 4),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > Degenor",
-    "description": "Gera órtese com furos esféricos com base em porcentagem de remoção",
-    "warning": "",
+    "description": "Gera órtese com furos cilíndricos com base em porcentagem de remoção",
     "doc_url": "https://github.com/andressasalgado/degenor.3d",
     "category": "Object",
 }
@@ -43,9 +42,6 @@ def criar_retangulo(comprimento, largura, espessura, nome="Retangulo", colecao=N
     cubo.scale = (comprimento, largura, espessura)
     cubo.name = nome
 
-    if cubo.name not in bpy.context.scene.collection.objects:
-        bpy.context.scene.collection.objects.link(cubo)
-
     if colecao:
         colecao.objects.link(cubo)
         if cubo.name in bpy.context.scene.collection.objects:
@@ -53,17 +49,31 @@ def criar_retangulo(comprimento, largura, espessura, nome="Retangulo", colecao=N
 
     return cubo
 
-# Calcula o volume de uma esfera com base no raio
-def calcular_volume_esfera(raio):
-    return (4/3) * math.pi * (raio ** 3)
+def criar_cilindro(raio, altura, localizacao, nome, colecao):
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=raio,
+        depth=altura,
+        location=localizacao
+    )
+    cilindro = bpy.context.active_object
+    cilindro.name = nome
 
-# Gera pontos aleatórios dentro do volume do retângulo para aplicar o design generativo
+    if colecao:
+        colecao.objects.link(cilindro)
+        if cilindro.name in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.unlink(cilindro)
+
+    return cilindro
+
+def calcular_volume_cilindro(raio, altura):
+    return math.pi * (raio ** 2) * altura
+
 def gerar_pontos_semente(volume_retangulo, remocao_percentual, comprimento, largura, espessura):
     volume_removido_alvo = (remocao_percentual / 100) * volume_retangulo
     volume_atual_removido = 0
     pontos = []
 
-    max_tentativas = 1500000
+    max_tentativas = 150000
     tentativas = 0
 
     usa_kdtree = False
@@ -72,16 +82,19 @@ def gerar_pontos_semente(volume_retangulo, remocao_percentual, comprimento, larg
     while volume_atual_removido < volume_removido_alvo and tentativas < max_tentativas:
         # Alternar tamanhos de furos dependendo de % já removido
         percentual_atual = (volume_atual_removido / volume_removido_alvo) * 100
-        if percentual_atual <= 50:
-            raio = random.uniform(0.001, 0.004)  # Furos maiores
-        else:
-            raio = random.uniform(0.0008, 0.001)  # Furos menores
 
-        volume_esfera = calcular_volume_esfera(raio)
+        if percentual_atual <= 50:
+            raio = random.uniform(0.0015, 0.0025)  # Furos grandes
+        elif percentual_atual <= 75:
+            raio = random.uniform(0.0012, 0.0018)  # Furos médios
+        else:
+            raio = random.uniform(0.0008, 0.0012)  # Furos pequenos
+
+        volume_cilindro = calcular_volume_cilindro(raio, espessura)
 
         x = random.uniform(-comprimento/2 + raio, comprimento/2 - raio)
         y = random.uniform(-largura/2 + raio, largura/2 - raio)
-        z = random.uniform(-espessura/2 + raio, espessura/2 - raio)
+        z = 0  # Cilindros atravessam a altura
 
         novo_ponto = Vector((x, y, z))
 
@@ -94,38 +107,28 @@ def gerar_pontos_semente(volume_retangulo, remocao_percentual, comprimento, larg
                 tree.balance()
                 usa_kdtree = True
 
-            for (co, idx, dist) in tree.find_range(novo_ponto, raio + 0.0042):
+            for (co, idx, dist) in tree.find_range(novo_ponto, raio + 0.004):
                 p2, r2 = pontos[idx]
                 if (novo_ponto - p2).length < (raio + r2 + 0.0002):
                     colisao = True
                     break
 
-        if not colisao and (volume_atual_removido + volume_esfera) <= volume_removido_alvo:
+        if not colisao and (volume_atual_removido + volume_cilindro) <= volume_removido_alvo:
             pontos.append((novo_ponto, raio))
-            volume_atual_removido += volume_esfera
-            usa_kdtree = False  # Forçar rebalanceamento na próxima iteração com novo ponto
+            volume_atual_removido += volume_cilindro
+            usa_kdtree = False
 
         tentativas += 1
 
     return pontos
 
-# Cria esferas nos pontos de semente gerados
-def criar_esferas(pontos, colecao):
-    esferas = []
+# Cria cilindros nos pontos de semente gerados
+def criar_cilindros(pontos, altura, colecao):
+    cilindros = []
     for idx, (ponto, raio) in enumerate(pontos):
-        bpy.ops.mesh.primitive_uv_sphere_add(radius=raio, location=ponto)
-        esfera = bpy.context.active_object
-        esfera.name = f"Furo_{idx}"
-
-        if esfera.name not in bpy.context.scene.collection.objects:
-            bpy.context.scene.collection.objects.link(esfera)
-
-        colecao.objects.link(esfera)
-        if esfera.name in bpy.context.scene.collection.objects:
-            bpy.context.scene.collection.objects.unlink(esfera)
-
-        esferas.append(esfera)
-    return esferas
+        cilindro = criar_cilindro(raio, altura + 0.001, ponto, f"Furo_{idx}", colecao)
+        cilindros.append(cilindro)
+    return cilindros
 
 # Aplica uma operação booleana de subtração de múltiplos objetos (cortadores) sobre uma base
 def aplicar_boolean_subtracao(base, cortadores):
@@ -157,17 +160,20 @@ def aplicar_boolean_diferenca(objeto_base, objeto_corte):
 
 # Cria a margem (moldura) externa da órtese, que delimita a peça
 def criar_margem(comprimento, largura, espessura, colecao):
+    # Cria a margem externa (um pouco maior que a base)
     margem_externa = criar_retangulo(comprimento + 0.01, largura + 0.0008, espessura, "Margem_Externa", colecao)
 
     corte_interno = criar_retangulo(comprimento, largura, espessura + 0.001, "Corte_Interno", colecao)
     aplicar_boolean_diferenca(margem_externa, corte_interno)
     bpy.data.objects.remove(corte_interno, do_unlink=True)
 
-    buraco1 = criar_retangulo(0.001, 0.005, espessura + 0.001, "Buraco1", colecao)
-    buraco1.location = (- (comprimento + 0.01) / 2 + 0.01, 0, 0)
+    buraco_largura = max(largura - 0.004, 0.007)
 
-    buraco2 = criar_retangulo(0.001, 0.005, espessura + 0.001, "Buraco2", colecao)
-    buraco2.location = ((comprimento + 0.01) / 2 - 0.01, 0, 0)
+    buraco1 = criar_retangulo(0.006, buraco_largura, espessura + 0.003, "Buraco1", colecao)
+    buraco1.location = (-(comprimento + 0.01) / 2 + 0.005, 0, 0)
+
+    buraco2 = criar_retangulo(0.006, buraco_largura, espessura + 0.003, "Buraco2", colecao)
+    buraco2.location = ((comprimento + 0.01) / 2 - 0.005, 0, 0)
 
     aplicar_boolean_diferenca(margem_externa, buraco1)
     aplicar_boolean_diferenca(margem_externa, buraco2)
@@ -196,7 +202,7 @@ class GeradorOrteseOperator(bpy.types.Operator):
     def execute(self, context):
         comprimento = context.scene.ortese_comprimento / 100
         largura = context.scene.ortese_largura / 100
-        espessura = 0.0006
+        espessura = 0.0008
 
         remocao = context.scene.ortese_remocao
         nome_arquivo = context.scene.ortese_nome_arquivo
@@ -208,8 +214,8 @@ class GeradorOrteseOperator(bpy.types.Operator):
         volume_retangulo = comprimento * largura * espessura
 
         pontos = gerar_pontos_semente(volume_retangulo, remocao, comprimento, largura, espessura)
-        esferas = criar_esferas(pontos, colecao)
-        aplicar_boolean_subtracao(retangulo, esferas)
+        cilindros = criar_cilindros(pontos, espessura, colecao)
+        aplicar_boolean_subtracao(retangulo, cilindros)
 
         margem = criar_margem(comprimento, largura, espessura, colecao)
 
@@ -243,7 +249,7 @@ class DegenorPainel(bpy.types.Panel):
     bl_idname = "PT_DegenorPanel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Degenor V3.4.1"
+    bl_category = "Degenor V3.5"
 
     def draw(self, context):
         layout = self.layout
