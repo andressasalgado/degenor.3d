@@ -94,7 +94,7 @@ def gerar_pontos_semente(volume_retangulo, remocao_percentual, comprimento, larg
 
         x = random.uniform(-comprimento/2 + raio, comprimento/2 - raio)
         y = random.uniform(-largura/2 + raio, largura/2 - raio)
-        z = 0  # Cilindros atravessam a altura
+        z = 0
 
         novo_ponto = Vector((x, y, z))
 
@@ -130,7 +130,7 @@ def criar_cilindros(pontos, altura, colecao):
         cilindros.append(cilindro)
     return cilindros
 
-# Aplica uma operação booleana de subtração de múltiplos objetos (cortadores) sobre uma base
+# Aplica uma operação booleana de subtração de múltiplos objetos sobre uma base
 def aplicar_boolean_subtracao(base, cortadores):
     bpy.ops.object.select_all(action='DESELECT')
     for obj in cortadores:
@@ -159,7 +159,7 @@ def aplicar_boolean_diferenca(objeto_base, objeto_corte):
 # -------------------- CRIAR MARGEM --------------------
 
 # Cria a margem (moldura) externa da órtese, que delimita a peça
-def criar_margem(comprimento, largura, espessura, colecao):
+def criar_margem(comprimento, largura, espessura, colecao, com_buracos=True):
     # Cria a margem externa (um pouco maior que a base)
     margem_externa = criar_retangulo(comprimento + 0.01, largura + 0.0008, espessura, "Margem_Externa", colecao)
 
@@ -167,19 +167,20 @@ def criar_margem(comprimento, largura, espessura, colecao):
     aplicar_boolean_diferenca(margem_externa, corte_interno)
     bpy.data.objects.remove(corte_interno, do_unlink=True)
 
-    buraco_largura = max(largura - 0.004, 0.007)
+    if com_buracos:
+        buraco_largura = max(largura - 0.004, 0.007)
 
-    buraco1 = criar_retangulo(0.006, buraco_largura, espessura + 0.003, "Buraco1", colecao)
-    buraco1.location = (-(comprimento + 0.01) / 2 + 0.005, 0, 0)
+        buraco1 = criar_retangulo(0.006, buraco_largura, espessura + 0.003, "Buraco1", colecao)
+        buraco1.location = (-(comprimento + 0.01) / 2 + 0.005, 0, 0)
 
-    buraco2 = criar_retangulo(0.006, buraco_largura, espessura + 0.003, "Buraco2", colecao)
-    buraco2.location = ((comprimento + 0.01) / 2 - 0.005, 0, 0)
+        buraco2 = criar_retangulo(0.006, buraco_largura, espessura + 0.003, "Buraco2", colecao)
+        buraco2.location = ((comprimento + 0.01) / 2 - 0.005, 0, 0)
 
-    aplicar_boolean_diferenca(margem_externa, buraco1)
-    aplicar_boolean_diferenca(margem_externa, buraco2)
+        aplicar_boolean_diferenca(margem_externa, buraco1)
+        aplicar_boolean_diferenca(margem_externa, buraco2)
 
-    bpy.data.objects.remove(buraco1, do_unlink=True)
-    bpy.data.objects.remove(buraco2, do_unlink=True)
+        bpy.data.objects.remove(buraco1, do_unlink=True)
+        bpy.data.objects.remove(buraco2, do_unlink=True)
 
     return margem_externa
 
@@ -206,6 +207,7 @@ class GeradorOrteseOperator(bpy.types.Operator):
 
         remocao = context.scene.ortese_remocao
         nome_arquivo = context.scene.ortese_nome_arquivo
+        tipo_material = context.scene.ortese_tipo_material
 
         colecao = obter_ou_criar_colecao("Ortese_Gerada")
         limpar_colecao("Ortese_Gerada")
@@ -217,7 +219,8 @@ class GeradorOrteseOperator(bpy.types.Operator):
         cilindros = criar_cilindros(pontos, espessura, colecao)
         aplicar_boolean_subtracao(retangulo, cilindros)
 
-        margem = criar_margem(comprimento, largura, espessura, colecao)
+        com_buracos = tipo_material == 'PLA_PET'
+        margem = criar_margem(comprimento, largura, espessura, colecao, com_buracos=com_buracos)
 
         bpy.ops.object.select_all(action='DESELECT')
         retangulo.select_set(True)
@@ -257,6 +260,7 @@ class DegenorPainel(bpy.types.Panel):
         layout.prop(context.scene, "ortese_largura")
         layout.prop(context.scene, "ortese_remocao")
         layout.prop(context.scene, "ortese_nome_arquivo")
+        layout.prop(context.scene, "ortese_tipo_material")
         layout.operator("object.gerar_ortese")
         layout.operator("object.limpar_ortese")
 
@@ -272,6 +276,7 @@ def register():
     bpy.types.Scene.ortese_largura = bpy.props.FloatProperty(name="Largura (cm)", default=5.0)
     bpy.types.Scene.ortese_remocao = bpy.props.FloatProperty(name="Remoção (%)", default=40.0)
     bpy.types.Scene.ortese_nome_arquivo = bpy.props.StringProperty(name="Nome do Arquivo STL", default="ortese_modelo")
+    bpy.types.Scene.ortese_tipo_material = bpy.props.EnumProperty(name="Tipo de Material", items=[('PLA_PET', "PLA/PET", "Usa PLA ou PET (com buracos)"), ('TPU', "TPU", "Usa TPU (sem buracos)"),],default='PLA_PET')
 
 def unregister():
     for cls in classes:
@@ -281,6 +286,7 @@ def unregister():
     del bpy.types.Scene.ortese_largura
     del bpy.types.Scene.ortese_remocao
     del bpy.types.Scene.ortese_nome_arquivo
+    del bpy.types.Scene.ortese_tipo_material
 
 if __name__ == "__main__":
     register()
